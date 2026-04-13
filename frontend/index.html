@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart City Pathfinding Simulator</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Top bar ──────────────────────────────────────────────── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo"></div>
+      <div class="topbar-titles">
+        <span class="topbar-name">Smart City Pathfinding Simulator</span>
+        <span class="topbar-sub">Mumbai Road Network — Algorithm Comparison</span>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-status-row">
+        <div class="server-indicator" id="serverIndicator">
+          <span class="indicator-dot" id="serverDot"></span>
+          <span id="serverLabel">Checking server...</span>
+        </div>
+        <div class="topbar-divider"></div>
+        <span class="traffic-badge traffic-off" id="trafficBadge">◌ Traffic: Connecting…</span>
+        <span class="traffic-timestamp" id="trafficTimestamp"></span>
+        <button class="btn-traffic-refresh" id="trafficRefreshBtn" title="Force traffic refresh">↺</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main layout ──────────────────────────────────────────── -->
+  <div class="app-body">
+
+    <!-- Left: Map -->
+    <div class="map-col">
+      <div id="map"></div>
+
+      <!-- Map loading pill (shown while fetching OSRM routes) -->
+      <div id="mapLoadingOverlay" class="hidden">
+        <div class="spinner"></div>
+        <span>Loading road segments…</span>
+      </div>
+
+      <!-- Frost overlay injected by JS: id="mapFrostOverlay" -->
+
+      <!-- Map footer: single clean legend bar -->
+      <div class="map-footer">
+        <div class="legend-bar">
+          <span class="leg-item"><span class="leg-dot" style="background:#1e8449"></span>Normal</span>
+          <span class="leg-item"><span class="leg-dot" style="background:#e67e22"></span>Moderate</span>
+          <span class="leg-item"><span class="leg-dot" style="background:#c0392b"></span>Heavy</span>
+          <span class="leg-sep"></span>
+          <span class="leg-item"><span class="leg-dot" style="background:#66A66F"></span>Source</span>
+          <span class="leg-item"><span class="leg-dot" style="background:#6FA8DC"></span>Target</span>
+          <span class="leg-item"><span class="leg-line" style="background:#3a1a00"></span>Best path</span>
+          <span class="leg-item"><span class="leg-line" style="background:#1a3a6b"></span>Evacuation</span>
+          <span class="leg-item"><span class="leg-line" style="background:#4a4a4a"></span>Edge</span>
+          <span class="leg-item"><span class="leg-line" style="background:#bdbdbd;border-top:2px dashed #bdbdbd"></span>Blocked</span>
+          <span class="leg-item"><span class="leg-dot" style="background:#D4A97A"></span>Safe Zone</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right: Sidebar controls -->
+    <aside class="sidebar">
+
+      <!-- ── Pathfinding card ────────────────────────────────── -->
+      <section class="card">
+        <h2 class="card-heading">Pathfinding</h2>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="sourceSelect">Source node</label>
+            <select id="sourceSelect"></select>
+          </div>
+          <div class="field">
+            <label for="targetSelect">Target node</label>
+            <select id="targetSelect"></select>
+          </div>
+        </div>
+
+        <!-- Blocked-edges status — populated dynamically -->
+        <div class="status-bar" id="blockedBar">No edges blocked.</div>
+
+        <div class="btn-group">
+          <button class="btn btn-primary" id="runAllBtn">Run All Algorithms</button>
+          <button class="btn btn-outline" id="autoDecideBtn">Auto-Decide</button>
+        </div>
+        <button class="btn btn-ghost btn-full" id="resetBtn">Reset Graph</button>
+
+        <!-- Algorithm progress indicator -->
+        <div id="algoProgress" class="hidden">
+          <div class="spinner"></div>
+          <span>Running algorithms…</span>
+        </div>
+
+        <!-- Decision output (hidden until used) -->
+        <div class="callout callout-info hidden" id="decisionBox">
+          <div class="callout-label">Recommendation</div>
+          <div id="decisionText"></div>
+        </div>
+
+        <!-- Results table (hidden until results arrive) -->
+        <div class="table-wrap hidden" id="resultsWrap">
+          <table class="results-table" id="resultsTable">
+            <thead>
+              <tr>
+                <th>ALGORITHM</th>
+                <th>PATH</th>
+                <th>COST (M)</th>
+                <th>TIME (US)</th>
+                <th>WHY CHOSEN</th>
+                <th>STATUS</th>
+              </tr>
+            </thead>
+            <tbody id="resultsBody"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- ── Disaster evacuation card ───────────────────────── -->
+      <section class="card">
+        <h2 class="card-heading">Disaster Evacuation</h2>
+
+        <div class="field-row">
+          <div class="field">
+            <label for="disasterType">Disaster Type</label>
+            <select id="disasterType">
+              <option value="urban_flood">Urban Flood</option>
+              <option value="storm_surge">Storm Surge</option>
+              <option value="cyclone">Cyclone</option>
+              <option value="earthquake">Earthquake</option>
+              <option value="heatwave">Heatwave</option>
+              <option value="post_flood_disease">Post-Flood Disease</option>
+              <option value="sea_level_rise">Sea Level Rise</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="disasterLoc">Epicenter</label>
+            <select id="disasterLoc"></select>
+          </div>
+        </div>
+
+        <!-- Public transport notice -->
+        <div class="callout callout-warn hidden" id="transportNotice"></div>
+
+        <button class="btn btn-danger btn-full" id="evacuateBtn">Evacuate Now</button>
+
+        <!-- Coastal alert for relevant disasters (dynamic) -->
+        <div id="coastalAlert" class="callout callout-warn hidden">
+          ⚠️ Coastal Flooding Alert: Bandstand (Node 8) is NOT safe during coastal flooding or storm surge.
+          Safe evacuation zones are: Mount Mary (Node 9), Bandra Fort (Node 14), and Pali Hill (Node 15).
+        </div>
+
+        <!-- Evacuation result (hidden until used) -->
+        <div class="evac-result hidden" id="evacResult">
+
+          <!-- Stat chips row -->
+          <div class="evac-chips">
+            <div class="evac-chip">
+              <div class="evac-chip-body">
+                <span class="evac-chip-label">Safe Node</span>
+                <span class="evac-chip-value" id="evacSafeNode">—</span>
+              </div>
+            </div>
+            <div class="evac-chip">
+              <div class="evac-chip-body">
+                <span class="evac-chip-label">Distance</span>
+                <span class="evac-chip-value" id="evacDistance">—</span>
+              </div>
+            </div>
+            <div class="evac-chip">
+              <div class="evac-chip-body">
+                <span class="evac-chip-label">Algorithm</span>
+                <span class="evac-chip-value" id="evacAlgo">—</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Route display -->
+          <div class="evac-route-block">
+            <div class="evac-route-label">Evacuation Route</div>
+            <div class="evac-route-value" id="evacRoute">—</div>
+          </div>
+
+          <!-- Zombie one-liner -->
+          <div class="callout callout-warn hidden" id="zombieLine"></div>
+
+          <!-- Per-algorithm breakdown -->
+          <div class="evac-breakdown-heading">Algorithm Breakdown</div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Algorithm</th>
+                  <th>Cost (m)</th>
+                  <th>Time (µs)</th>
+                  <th>Why Chosen</th>
+                </tr>
+              </thead>
+              <tbody id="evacBreakdown"></tbody>
+            </table>
+          </div>
+
+        </div>
+      </section>
+
+    </aside>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast hidden" id="toast"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="graph.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

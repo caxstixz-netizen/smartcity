@@ -1,0 +1,11 @@
+# Ignore build and dependency directories
+build/
+
+# Ignore compiled binaries and object files
+*.exe
+*.out
+*.o
+server
+
+# Ignore local environment files
+.env
