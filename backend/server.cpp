@@ -263,30 +263,30 @@ int main() {
         {3,4,1100}, // S.V. Road  → Turner Rd (~1.1 km)
         {3,5,800},  // S.V. Road  → Waterfield Rd (~800 m)
         {4,6,550},  // Turner Rd  → 14th Road (~550 m)
-        {4,7,750},  // Turner Rd  → Hill Road (~750 m)
+        {4,7,450},  // Turner Rd  → Hill Road (~450 m)  [FIX: was 750, real ~430 m]
         {5,6,600},  // Waterfield → 14th Road (~600 m)
         {5,7,700},  // Waterfield → Hill Road (~700 m)
         {6,8,650},  // 14th Road  → Bandstand (~650 m)
         {7,9,500},  // Hill Road  → Mount Mary (~500 m)
-        {8,9,900},  // Bandstand  → Mount Mary (~900 m)
+        {8,9,500},  // Bandstand  → Mount Mary (~500 m)  [FIX: was 900, real ~520 m]
         // ── Nodes 10–15 ───────────────────────────────────────────────────
-        {0,10,350},  // Bandra Stn  → Bandra Talao (~350 m)
-        {3,10,200},  // S.V. Road   → Bandra Talao (~200 m)
-        {7,11,400},  // Hill Road   → Carter Rd Promenade (~400 m)
-        {4,12,300},  // Turner Rd   → St. Andrew's Church (~300 m)
-        {11,12,250}, // Carter Rd   → St. Andrew's Church (~250 m)
-        {5,13,450},  // Waterfield  → Bandra Reclamation (~450 m)
-        {8,14,300},  // Bandstand   → Bandra Fort (~300 m)
-        {9,14,500},  // Mount Mary  → Bandra Fort (~500 m)
-        {1,15,600},  // Khar Stn    → Pali Hill (~600 m)
-        {10,15,700}, // Bandra Talao → Pali Hill (~700 m)
-        {12,15,350}, // St. Andrew's → Pali Hill (~350 m)
-        {14,15,800}, // Bandra Fort  → Pali Hill (~800 m)
+        {0,10,350},   // Bandra Stn  → Bandra Talao (~350 m)
+        {3,10,650},   // S.V. Road   → Bandra Talao (~650 m)  [FIX: was 200, real ~658 m]
+        {7,11,1700},  // Hill Road   → Carter Rd Promenade (~1700 m)  [FIX: was 400, real ~1695 m]
+        {4,12,300},   // Turner Rd   → St. Andrew's Church (~300 m)
+        {11,12,1150}, // Carter Rd   → St. Andrew's Church (~1150 m)  [FIX: was 250, real ~1140 m]
+        {5,13,450},   // Waterfield  → Bandra Reclamation (~450 m)
+        {8,14,300},   // Bandstand   → Bandra Fort (~300 m)
+        {9,14,500},   // Mount Mary  → Bandra Fort (~500 m)
+        {1,15,600},   // Khar Stn    → Pali Hill (~600 m)
+        {10,15,1800}, // Bandra Talao → Pali Hill (~1800 m)  [FIX: was 700, real ~1820 m]
+        {12,15,1450}, // St. Andrew's → Pali Hill (~1450 m)  [FIX: was 350, real ~1455 m]
+        {14,15,3000}, // Bandra Fort  → Pali Hill (~3000 m)  [FIX: was 800, real ~3019 m]
         // ── Node 16 ───────────────────────────────────────────────────────
         {1,16,250},  // Khar Stn   → Khar Gymkhana (~250 m)
         {2,16,550},  // Linking Rd → Khar Gymkhana (~550 m)
         // ── NEW nodes 17–19: Bandra–Khar corridor (~3–4 km total) ────────
-        {16,17,400}, // Khar Gymkhana   → Khara Road (~400 m)
+        {16,17,250}, // Khar Gymkhana   → Khara Road (~250 m)  [FIX: was 400, real ~234 m]
         {3,17,600},  // S.V. Road       → Khara Road (~600 m)
         {17,18,350}, // Khar Danda Rd   → 16th Rd–Linking Jn (~350 m)
         {2,18,300},  // Linking Road    → 16th Rd–Linking Jn (~300 m)
@@ -525,7 +525,7 @@ int main() {
                 disasterGraph = applyEarthquake(graph);
             } else if (disasterKey == "heatwave") {
                 disasterGraph = applyHeatwave(graph);
-            } else if (disasterKey == "disease" || disasterKey == "post-flood_disease") {
+            } else if (disasterKey == "disease" || disasterKey == "post-flood_disease" || disasterKey == "post_flood_disease") {
                 disasterGraph = applyDiseaseOutbreak(graph);
             } else if (disasterKey == "sea_level_rise" || disasterKey == "slr") {
                 disasterGraph = applySeaLevelRise(graph);
