@@ -920,13 +920,13 @@ function updatePublicTransportNotice(disasterType) {
   if (!noticeEl) return;
 
   const notices = {
-    'urban_flood':       '⚠️ Urban flooding has disrupted all public transport (buses, trains, autos). Only walking evacuation routes are available.',
-    'storm_surge':       '⚠️ Storm surge warning: Coastal roads may be submerged. Public transport suspended. Evacuate on foot immediately.',
-    'cyclone':           '⚠️ Cyclone alert: All public transport halted. Strong winds may cause debris — seek shelter on high ground.',
-    'earthquake':        '⚠️ Earthquake damage: Roads may be cracked, public transport stopped. Use caution when evacuating.',
-    'heatwave':          '⚠️ Heatwave advisory: Public transport operating but crowded. Stay hydrated while evacuating.',
-    'post-flood_disease':'⚠️ Disease outbreak risk: Avoid stagnant water. Public transport limited in affected zones.',
-    'sea_level_rise':    '⚠️ Long-term sea level rise: Some coastal routes may be permanently affected. Plan alternative routes.',
+    'urban_flood':       'Urban flooding has disrupted all public transport (buses, trains, autos). Only walking evacuation routes are available.',
+    'storm_surge':       'Storm surge warning: Coastal roads may be submerged. Public transport suspended. Evacuate on foot immediately.',
+    'cyclone':           'Cyclone alert: All public transport halted. Strong winds may cause debris — seek shelter on high ground.',
+    'earthquake':        'Earthquake damage: Roads may be cracked, public transport stopped. Use caution when evacuating.',
+    'heatwave':          'Heatwave advisory: Public transport operating but crowded. Stay hydrated while evacuating.',
+    'post_flood_disease':'Disease outbreak risk: Avoid stagnant water. Public transport limited in affected zones.',
+    'sea_level_rise':    'Long-term sea level rise: Some coastal routes may be permanently affected. Plan alternative routes.',
   };
 
   noticeEl.textContent = notices[disasterType] || '⚠️ Public transport may be disrupted due to this disaster.';
