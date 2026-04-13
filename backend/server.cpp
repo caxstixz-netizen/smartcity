@@ -25,8 +25,8 @@
 using namespace std;
 using json = nlohmann::json;
 
-// Safe nodes (evacuation targets)
-const vector<int> SAFE_NODES = {8, 9, 14, 15, 21};  // Bandstand, Mount Mary, Bandra Fort (high ground), Pali Hill, Juhu Beach
+// Safe nodes (evacuation targets) — all within valid range 0–19
+const vector<int> SAFE_NODES = {8, 9, 14, 15};  // Bandstand, Mount Mary, Bandra Fort, Pali Hill
 
 // Disaster severity multipliers
 const double FLOOD_SPEED_REDUCTION = 8.0;      // 8x slower travel
@@ -48,18 +48,17 @@ const map<int, double> NODE_ELEVATION = {
     {7, 4.0},    // Hill Road (coastal)
     {8, 2.0},    // Bandstand (sea level - NOT safe for surge!)
     {9, 24.0},   // Mount Mary (high ground - very safe)
-    {10, 19.056424}, // Bandra Talao
+    {10, 10.0},  // Bandra Talao
     {11, 7.0},   // Carter Road Promenade
-    {12, 19.05500},  // St. Andrew's Church
+    {12, 9.0},   // St. Andrew's Church
     {13, 5.0},   // Bandra Reclamation
     {14, 24.0},  // Bandra Fort (high ground - safe)
     {15, 30.0},  // Pali Hill (highest ground - very safe)
     {16, 8.0},   // Khar Gymkhana
-    {17, 6.0},   // Juhu Circle
-    {18, 6.0},   // ISKCON Temple Juhu
-    {19, 4.0},   // Prithvi Theatre (coastal)
-    {20, 7.0},   // Santacruz West Station
-    {21, 8.0}    // Juhu Beach (high-ground safe zone)
+    // NEW corridor nodes
+    {17, 9.0},   // Khara Road
+    {18, 8.0},   // 16th Road–Linking Jn.
+    {19, 10.0},  // Perry Cross Road
 };
 
 // Smart evacuation: choose safe node based on elevation AND distance
@@ -249,46 +248,51 @@ int main() {
         return httplib::Server::HandlerResponse::Unhandled;
     });
 
-    CityGraph graph(22);
+    CityGraph graph(20);
 
     // Define edges: from, to, weight (meters)
+    // 20 nodes (0–19): 17 original Bandra nodes + 3 NEW Bandra-Khar corridor nodes
     vector<tuple<int,int,double>> mumbaiEdges = {
-        // Existing edges (unchanged)
-        {0,2,1600}, {0,3,900},
-        {1,2,800},  {1,3,500},
-        {2,4,700},  {2,5,600},
-        {3,4,1100}, {3,5,800},
-        {4,6,550},  {4,7,750},
-        {5,6,600},  {5,7,700},
-        {6,8,650},  {7,9,500},
-        {8,9,900},
-        
-        // New edges connecting new nodes (actual road distances in meters)
-        {0,10,350},  // Bandra Station to Bandra Talao (short walk)
-        {3,10,200},  // S.V. Road to Bandra Talao
-        {7,11,400},  // Hill Road to Carter Road Promenade
-        {4,12,300},  // Turner Road to St. Andrew's Church
-        {11,12,250}, // Carter Road to St. Andrew's Church
-        {5,13,450},  // Waterfield Road to Bandra Reclamation
-        {8,14,300},  // Bandstand to Bandra Fort
-        {9,14,500},  // Mount Mary to Bandra Fort
-        {1,15,600},  // Khar Station to Pali Hill
-        {10,15,700}, // Bandra Talao to Pali Hill
-        {12,15,350}, // St. Andrew's Church to Pali Hill
-        {14,15,800}, // Bandra Fort to Pali Hill (longer route)
-
-        // New nodes 16-21 connections
-        {1,16,250},   // Khar Station → Khar Gymkhana
-        {2,16,400},   // Linking Road → Khar Gymkhana
-        {16,17,1800}, // Khar Gymkhana → Juhu Circle (via 14th Rd)
-        {11,17,900},  // Carter Road Promenade → Juhu Circle
-        {17,18,500},  // Juhu Circle → ISKCON Temple
-        {18,19,600},  // ISKCON → Prithvi Theatre
-        {19,21,300},  // Prithvi Theatre → Juhu Beach
-        {17,20,700},  // Juhu Circle → Santacruz West Station
-        {20,21,1200}, // Santacruz West Station → Juhu Beach
-        {15,17,1400}, // Pali Hill → Juhu Circle
-        {18,21,200}   // ISKCON → Juhu Beach (short walk)
+        // ── Core Bandra grid (nodes 0–8) ──────────────────────────────────
+        {0,2,1600}, // Bandra Stn → Linking Rd (~1.6 km)
+        {0,3,900},  // Bandra Stn → S.V. Road (~900 m)
+        {1,2,800},  // Khar Stn   → Linking Rd (~800 m)
+        {1,3,500},  // Khar Stn   → S.V. Road (~500 m)
+        {2,4,700},  // Linking Rd → Turner Rd (~700 m)
+        {2,5,600},  // Linking Rd → Waterfield Rd (~600 m)
+        {3,4,1100}, // S.V. Road  → Turner Rd (~1.1 km)
+        {3,5,800},  // S.V. Road  → Waterfield Rd (~800 m)
+        {4,6,550},  // Turner Rd  → 14th Road (~550 m)
+        {4,7,750},  // Turner Rd  → Hill Road (~750 m)
+        {5,6,600},  // Waterfield → 14th Road (~600 m)
+        {5,7,700},  // Waterfield → Hill Road (~700 m)
+        {6,8,650},  // 14th Road  → Bandstand (~650 m)
+        {7,9,500},  // Hill Road  → Mount Mary (~500 m)
+        {8,9,900},  // Bandstand  → Mount Mary (~900 m)
+        // ── Nodes 10–15 ───────────────────────────────────────────────────
+        {0,10,350},  // Bandra Stn  → Bandra Talao (~350 m)
+        {3,10,200},  // S.V. Road   → Bandra Talao (~200 m)
+        {7,11,400},  // Hill Road   → Carter Rd Promenade (~400 m)
+        {4,12,300},  // Turner Rd   → St. Andrew's Church (~300 m)
+        {11,12,250}, // Carter Rd   → St. Andrew's Church (~250 m)
+        {5,13,450},  // Waterfield  → Bandra Reclamation (~450 m)
+        {8,14,300},  // Bandstand   → Bandra Fort (~300 m)
+        {9,14,500},  // Mount Mary  → Bandra Fort (~500 m)
+        {1,15,600},  // Khar Stn    → Pali Hill (~600 m)
+        {10,15,700}, // Bandra Talao → Pali Hill (~700 m)
+        {12,15,350}, // St. Andrew's → Pali Hill (~350 m)
+        {14,15,800}, // Bandra Fort  → Pali Hill (~800 m)
+        // ── Node 16 ───────────────────────────────────────────────────────
+        {1,16,250},  // Khar Stn   → Khar Gymkhana (~250 m)
+        {2,16,550},  // Linking Rd → Khar Gymkhana (~550 m)
+        // ── NEW nodes 17–19: Bandra–Khar corridor (~3–4 km total) ────────
+        {16,17,400}, // Khar Gymkhana   → Khara Road (~400 m)
+        {3,17,600},  // S.V. Road       → Khara Road (~600 m)
+        {17,18,350}, // Khar Danda Rd   → 16th Rd–Linking Jn (~350 m)
+        {2,18,300},  // Linking Road    → 16th Rd–Linking Jn (~300 m)
+        {18,19,400}, // 16th Rd–Lnkg Jn→ Perry Cross Road (~400 m)
+        {15,19,450}, // Pali Hill       → Perry Cross Road (~450 m)
+        {11,19,500}, // Carter Rd Prom  → Perry Cross Road (~500 m)
     };
 
     for (auto [u, v, w] : mumbaiEdges) {
@@ -317,36 +321,34 @@ int main() {
     graph.nodeNames[14] = "Bandra Fort";
     graph.nodeNames[15] = "Pali Hill";
     graph.nodeNames[16] = "Khar Gymkhana";
-    graph.nodeNames[17] = "Juhu Circle";
-    graph.nodeNames[18] = "ISKCON Temple Juhu";
-    graph.nodeNames[19] = "Prithvi Theatre";
-    graph.nodeNames[20] = "Santacruz West Station";
-    graph.nodeNames[21] = "Juhu Beach";
+    // NEW: 3 replacement nodes between Bandra West and Khar
+    graph.nodeNames[17] = "Khara Road";
+    graph.nodeNames[18] = "16th Road-Linking Jn.";
+    graph.nodeNames[19] = "Perry Cross Road";
 
     // Node coordinates (lat, lng) – Mumbai map
     graph.nodeCoords = {
-        {19.0544, 72.8406}, // 0: Bandra Station
-        {19.0711, 72.8362}, // 1: Khar Station
-        {19.0621, 72.8347}, // 2: Linking Road
-        {19.0622, 72.8396}, // 3: S.V. Road
-        {19.0548, 72.8282}, // 4: Turner Road
-        {19.0549, 72.8316}, // 5: Waterfield Road
-        {19.0509, 72.8247}, // 6: 14th Road
-        {19.0511, 72.8294}, // 7: Hill Road
-        {19.0447, 72.8230}, // 8: Bandstand
-        {19.0478, 72.8267}, // 9: Mount Mary
+        {19.0544, 72.8406},   // 0:  Bandra Station
+        {19.0711, 72.8362},   // 1:  Khar Station
+        {19.0621, 72.8347},   // 2:  Linking Road
+        {19.0622, 72.8396},   // 3:  S.V. Road
+        {19.0548, 72.8282},   // 4:  Turner Road
+        {19.0549, 72.8316},   // 5:  Waterfield Road
+        {19.0509, 72.8247},   // 6:  14th Road
+        {19.0511, 72.8294},   // 7:  Hill Road
+        {19.0447, 72.8230},   // 8:  Bandstand
+        {19.0478, 72.8267},   // 9:  Mount Mary
         {19.056424, 72.838245}, // 10: Bandra Talao
         {19.065185, 72.823235}, // 11: Carter Road Promenade
         {19.05500, 72.82444},   // 12: St. Andrew's Church
         {19.05106, 72.83305},   // 13: Bandra Reclamation
         {19.041770, 72.818580}, // 14: Bandra Fort
         {19.068, 72.826},       // 15: Pali Hill
-        {19.0711, 72.8362},     // 16: Khar Gymkhana
-        {19.11552, 72.83},      // 17: Juhu Circle
-        {19.11295, 72.826553},  // 18: ISKCON Temple Juhu
-        {19.10622, 72.82572},   // 19: Prithvi Theatre
-        {19.0844, 72.83729},    // 20: Santacruz West Station
-        {19.10295, 72.82306}    // 21: Juhu Beach
+        {19.0680, 72.8365},     // 16: Khar Gymkhana
+        // NEW: 3 replacement nodes (Bandra–Khar corridor, ~3–4 km)
+        {19.0660, 72.8372},     // 17: Khara Road
+        {19.0645, 72.8355},     // 18: 16th Road–Linking Jn.
+        {19.0635, 72.8330},     // 19: Perry Cross Road
     };
 
     // Existing solve endpoint
