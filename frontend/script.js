@@ -615,14 +615,20 @@ function animatePath(nodeIds, color, onDone) {
 
   if (!nodeIds || nodeIds.length < 2) { if (onDone) onDone(); return null; }
 
+  // ── STEP 1+3: Precompute full path BEFORE animation starts (no mid-frame lookups) ──
   const allPts = pathToLatLngs(nodeIds);
   if (allPts.length < 2) { if (onDone) onDone(); return null; }
 
   const isEvac     = (color === '#B08968');
   const isBestPath = (color === '#66A66F');
-  const lineColor  = isBestPath ? '#3a1a00' : color;
-  const lineWeight = isBestPath ? 7 : 5;
-  const glowColor  = isBestPath ? 'rgba(90,40,0,0.18)' : 'rgba(180,140,100,0.18)';
+
+  // ── STEP 2: Dark navy blue path, bold weight ──
+  const lineColor  = isBestPath ? '#0D1B2A' : (isEvac ? '#0D1B2A' : '#0D1B2A');
+  const lineWeight = isBestPath ? 8 : 7;
+  const glowColor  = 'rgba(13,27,42,0.15)';
+
+  // ── STEP 3: Pre-build LatLng objects to avoid repeated array creation in rAF ──
+  const latLngs = allPts.map(p => L.latLng(p[0], p[1]));
 
   const glowLine = L.polyline([], {
     color: glowColor, weight: lineWeight + 8, opacity: 1,
@@ -636,25 +642,28 @@ function animatePath(nodeIds, color, onDone) {
   if (isEvac) evacPolyline = finalLine;
   else        pathPolyline = finalLine;
 
-  // Phase 1: overview
-  map.fitBounds(L.latLngBounds(allPts), { padding: [70, 70], animate: true, duration: 1.0 });
+  // ── STEP 1: Preload edges are already drawn — show overview immediately ──
+  map.fitBounds(L.latLngBounds(allPts), { padding: [70, 70], animate: true, duration: 0.8 });
 
-  const MS_PER_POINT = allPts.length > 80 ? 200 : 260;
-  const FOLLOW_ZOOM  = 16;
-  const FOLLOW_DELAY = 1200;
-  const PAN_EVERY_N  = 20;
-  const PAN_DURATION = 1.6;   // seconds — long = silky cinematic glide
+  // ── STEP 1: Lerp camera state ──────────────────────────────────────────────
+  const FOLLOW_ZOOM    = 16;
+  const FOLLOW_DELAY   = 900;    // ms before follow cam kicks in
+  const MS_PER_POINT   = latLngs.length > 80 ? 180 : 230;
+  const LERP_SPEED     = 0.04;   // 0–1: lower = slower/smoother lerp
+  const CAM_MIN_DIST   = 0.0003; // only lerp if marker moved at least this much (degrees)
 
-  let followEnabled = false;
-  let panCounter    = 0;
-  let lastPanTime   = 0;
-
-  let idx = 0;  // declared here so setTimeout closure can read it
+  let followEnabled  = false;
+  let camLat         = null;
+  let camLng         = null;
+  let lastPanRaf     = 0;        // timestamp of last camera pan rAF
+  let idx            = 0;
 
   setTimeout(() => {
     followEnabled = true;
-    const startPt = allPts[Math.min(idx, allPts.length - 1)];
-    map.setView(startPt, FOLLOW_ZOOM, { animate: true, duration: 1.0, easeLinearity: 0.1 });
+    const startPt = latLngs[Math.min(idx, latLngs.length - 1)];
+    camLat = startPt.lat;
+    camLng = startPt.lng;
+    map.setView([camLat, camLng], FOLLOW_ZOOM, { animate: true, duration: 1.2, easeLinearity: 0.1 });
   }, FOLLOW_DELAY);
 
   let lastTime = null;
@@ -664,14 +673,21 @@ function animatePath(nodeIds, color, onDone) {
     const elapsed = Math.min(ts - lastTime, MS_PER_POINT * 4);
     lastTime = ts;
 
+    // ── STEP 3: Batch add points — avoid addLatLng inside tight loops ──
     const steps = Math.max(1, Math.floor(elapsed / MS_PER_POINT));
-    for (let s = 0; s < steps && idx < allPts.length; s++, idx++) {
-      finalLine.addLatLng(allPts[idx]);
-      glowLine.addLatLng(allPts[idx]);
+    const batchPts = [];
+    for (let s = 0; s < steps && idx < latLngs.length; s++, idx++) {
+      batchPts.push(latLngs[idx]);
+    }
+    if (batchPts.length) {
+      const cur = finalLine.getLatLngs();
+      const gCur = glowLine.getLatLngs();
+      finalLine.setLatLngs(cur.concat(batchPts));
+      glowLine.setLatLngs(gCur.concat(batchPts));
     }
 
-    if (idx < allPts.length) {
-      const currentPt = allPts[idx];
+    if (idx < latLngs.length) {
+      const currentPt = latLngs[idx];
 
       if (!animationMarker) {
         animationMarker = L.circleMarker(currentPt, {
@@ -682,16 +698,24 @@ function animatePath(nodeIds, color, onDone) {
         animationMarker.setLatLng(currentPt);
       }
 
-      // Only pan if enough points elapsed AND previous pan has mostly finished
-      if (followEnabled) {
-        panCounter++;
-        if (panCounter >= PAN_EVERY_N && (ts - lastPanTime) > PAN_DURATION * 600) {
-          panCounter  = 0;
-          lastPanTime = ts;
-          map.panTo(currentPt, {
-            animate: true, duration: PAN_DURATION,
-            easeLinearity: 0.05, noMoveStart: true,
-          });
+      // ── STEP 1: Smooth lerp follow camera — no abrupt jumps ──
+      if (followEnabled && camLat !== null) {
+        const tLat = currentPt.lat;
+        const tLng = currentPt.lng;
+        const dist  = Math.abs(tLat - camLat) + Math.abs(tLng - camLng);
+
+        if (dist > CAM_MIN_DIST) {
+          camLat += (tLat - camLat) * LERP_SPEED;
+          camLng += (tLng - camLng) * LERP_SPEED;
+
+          // Only issue a pan every ~80ms to avoid flooding Leaflet's pan queue
+          if (ts - lastPanRaf > 80) {
+            lastPanRaf = ts;
+            map.panTo([camLat, camLng], {
+              animate: true, duration: 0.45,
+              easeLinearity: 0.3, noMoveStart: true,
+            });
+          }
         }
       }
 
@@ -780,6 +804,9 @@ async function runAllAlgorithms() {
   renderResultsTable(results, algoConfigs);
   hideAlgoProgress();
   setBusy(false);   // buttons re-enabled right now, don't wait for animation
+
+  // ── STEP 1: Ensure road polylines applied before animation ──
+  applyRoadPolylines();
 
   // ── Animation is fire-and-forget decorative only ────────────────────────
   const successful = Object.values(results).filter(r => r.ok && r.path?.length > 0);
@@ -903,6 +930,7 @@ async function autoDecide() {
     box.classList.remove('hidden');
     hideAlgoProgress();
     setBusy(false);
+    applyRoadPolylines(); // STEP 1: ensure edges preloaded
     if (res.path?.length) animatePath(res.path, '#66A66F', () => {});
   } catch (err) {
     hideAlgoProgress();
@@ -1012,6 +1040,7 @@ function renderEvacResult(data, disaster) {
 
   if (evacPolyline) { evacPolyline.remove(); evacPolyline = null; }
   if (pathIds.length) {
+    applyRoadPolylines(); // STEP 1: ensure edges preloaded
     const line = animatePath(pathIds, '#B08968', () => {});
     if (line) evacPolyline = line;
   }
