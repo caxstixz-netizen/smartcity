@@ -9,7 +9,7 @@
 using namespace std;
 
 //Starts a timer to measure execution time in microseconds.
-tuple<vector<int>, double, long long> runBellmanFord(const CityGraph& graph, int src, int dst, double raiot) {
+tuple<vector<int>, double, long long> runBellmanFord(const CityGraph& graph, int src, int dst) {
     auto start = chrono::high_resolution_clock::now();
 
     int n = graph.getAdj().size();
@@ -50,7 +50,6 @@ tuple<vector<int>, double, long long> runBellmanFord(const CityGraph& graph, int
     long long elapsed = chrono::duration_cast<chrono::microseconds>(end - start).count();
 
     if (dist[dst] == INT_MAX) return {{}, -1, elapsed};
-    if (raiot >= 0 && dist[dst] > raiot) return {{}, -1, elapsed};
 
     //The loop pushes nodes in reverse order (from destination to source), 
     //so we reverse the vector to get the correct order from source to destination.

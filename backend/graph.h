@@ -47,7 +47,6 @@ public:
         nodeActive         = other.nodeActive;
         nodeCoords         = other.nodeCoords;
         blockedEdges       = other.blockedEdges;
-        riotNodes          = other.riotNodes;
         originalEdges      = other.originalEdges;
         rawEdges           = other.rawEdges;
         baseWeights        = other.baseWeights;
@@ -68,7 +67,6 @@ public:
         nodeActive         = other.nodeActive;
         nodeCoords         = other.nodeCoords;
         blockedEdges       = other.blockedEdges;
-        riotNodes          = other.riotNodes;
         originalEdges      = other.originalEdges;
         rawEdges           = other.rawEdges;
         baseWeights        = other.baseWeights;
@@ -85,7 +83,6 @@ public:
         nodeActive         = std::move(other.nodeActive);
         nodeCoords         = std::move(other.nodeCoords);
         blockedEdges       = std::move(other.blockedEdges);
-        riotNodes          = std::move(other.riotNodes);
         originalEdges      = std::move(other.originalEdges);
         rawEdges           = std::move(other.rawEdges);
         baseWeights        = std::move(other.baseWeights);
@@ -102,7 +99,6 @@ public:
         nodeActive         = std::move(other.nodeActive);
         nodeCoords         = std::move(other.nodeCoords);
         blockedEdges       = std::move(other.blockedEdges);
-        riotNodes          = std::move(other.riotNodes);
         originalEdges      = std::move(other.originalEdges);
         rawEdges           = std::move(other.rawEdges);
         baseWeights        = std::move(other.baseWeights);
@@ -193,16 +189,6 @@ public:
 
     bool isBlocked(int u, int v) const { //checks if a directed edge is blocked.
         return blockedEdges.find({u, v}) != blockedEdges.end();
-    }
-
-    // ── Riot zone ─────────────────────────────────────────────────────────
-    void setRiotNodes(const std::vector<int>& nodes) {
-        riotNodes.clear();
-        for (int n : nodes) riotNodes.insert(n);
-    }
-
-    bool isRiotAffected(int u, int v) const {
-        return riotNodes.count(u) || riotNodes.count(v);
     }
 
     // ── Road polyline (intermediate waypoints for an edge) ─────────────────
@@ -299,7 +285,6 @@ public:
 private:
     std::vector<std::vector<Edge>> adj;
     std::unordered_set<std::pair<int,int>, PairHash> blockedEdges;
-    std::unordered_set<int> riotNodes;
     std::vector<std::tuple<int,int,double>> originalEdges;
     std::vector<std::tuple<int,int,double>> rawEdges;
 

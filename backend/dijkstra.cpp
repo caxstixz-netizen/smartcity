@@ -10,7 +10,7 @@
 using namespace std; 
 
 //Start timer to measure execution time in microseconds.
-tuple<vector<int>, double, long long> runDijkstra(const CityGraph& graph, int src, int dst, double raiot) {
+tuple<vector<int>, double, long long> runDijkstra(const CityGraph& graph, int src, int dst) {
     auto start = chrono::high_resolution_clock::now();
 
     int n = graph.getAdj().size();
@@ -51,9 +51,6 @@ tuple<vector<int>, double, long long> runDijkstra(const CityGraph& graph, int sr
     long long elapsed = chrono::duration_cast<chrono::microseconds>(end - start).count();
 
     if (dist[dst] == INT_MAX) return {{}, -1, elapsed};
-
-    // raiot check
-    if (raiot >= 0 && dist[dst] > raiot) return {{}, -1, elapsed};
 
     //Reconstruct the path from destination back to source using prev array, 
     //then reverse to get source→destination order.

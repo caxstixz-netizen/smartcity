@@ -365,12 +365,6 @@ int main() {
             int target = body["target"];
             string algo = body["algorithm"];
 
-            // raiot: maximum allowed total cost; -1 means no limit
-            double raiot = -1.0;
-            if (body.contains("raiot") && !body["raiot"].is_null()) {
-                raiot = body["raiot"].get<double>();
-            }
-
             if (source < 0 || source >= graph.nodeCount() || target < 0 || target >= graph.nodeCount()) {
                 res.status = 400;
                 result["error"] = "Source or target out of range (0-" + to_string(graph.nodeCount() - 1) + ")";
@@ -397,13 +391,13 @@ int main() {
             }
 
             if (algo == "dijkstra") {
-                auto [path, cost, timeUs] = runDijkstra(localGraph, source, target, raiot);
+                auto [path, cost, timeUs] = runDijkstra(localGraph, source, target);
                 result = {{"path", path}, {"cost", cost}, {"timeUs", timeUs}};
             } else if (algo == "bellman") {
-                auto [path, cost, timeUs] = runBellmanFord(localGraph, source, target, raiot);
+                auto [path, cost, timeUs] = runBellmanFord(localGraph, source, target);
                 result = {{"path", path}, {"cost", cost}, {"timeUs", timeUs}};
             } else if (algo == "backtrack") {
-                auto [path, cost, timeUs] = runBacktracking(localGraph, source, target, raiot);
+                auto [path, cost, timeUs] = runBacktracking(localGraph, source, target);
                 result = {{"path", path}, {"cost", cost}, {"timeUs", timeUs}};
             } else {
                 res.status = 400;
@@ -590,7 +584,7 @@ int main() {
             // Run all algorithms
             auto [dijkPath, dijkCost, dijkTime] = runDijkstra(disasterGraph, location, safeNode);
             auto [bellPath, bellCost, bellTime] = runBellmanFord(disasterGraph, location, safeNode);
-            auto [backPath, backCost, backTime] = runBacktracking(disasterGraph, location, safeNode, -1.0);
+            auto [backPath, backCost, backTime] = runBacktracking(disasterGraph, location, safeNode);
             
             // Choose fastest algorithm
             string chosenAlgo;

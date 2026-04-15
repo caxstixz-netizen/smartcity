@@ -50,14 +50,13 @@ static void dfs(
     }
 }
 //Starts a high‑resolution timer to measure execution time in microseconds.
-tuple<vector<int>, double, long long> runBacktracking(const CityGraph& graph, int src, int dst, double raiot) {
+tuple<vector<int>, double, long long> runBacktracking(const CityGraph& graph, int src, int dst) {
     auto start = chrono::high_resolution_clock::now();
 
     int n = graph.getAdj().size();
     vector<int> bestPath;
 
-    // Use raiot as initial upper bound if provided, otherwise use infinity
-    double bestCost = (raiot >= 0) ? raiot : (double)INT_MAX;
+    double bestCost = (double)INT_MAX;
 
     vector<bool> visited(n, false); // all false initially.
     vector<int>  curPath = { src }; //starts with the source node.
