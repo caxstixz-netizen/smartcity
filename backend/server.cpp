@@ -58,23 +58,50 @@ const map<int, double> NODE_ELEVATION = {
     {19, 10.0},  // Perry Cross Road
 };
 
-// Smart evacuation: choose safe node based on elevation AND distance
+// Geographic center of the map for directional calculations
+const double CENTER_LAT = 19.056;
+const double CENTER_LNG = 72.829;
+
+// Smart evacuation: choose safe node based on elevation, distance, direction, and minimum hops
 pair<int, double> getSmartEvacuationNode(const CityGraph& graph, int source, 
                                           const vector<int>& safeNodes) {
     double bestScore = -1e9; // Higher is better
     int bestNode = -1;
     
+    // Get source coordinates
+    auto [source_lat, source_lng] = graph.nodeCoords[source];
+    
+    // Determine disaster direction relative to center
+    bool disaster_east = source_lng > CENTER_LNG;
+    bool disaster_west = source_lng < CENTER_LNG;
+    bool disaster_north = source_lat > CENTER_LAT;
+    bool disaster_south = source_lat < CENTER_LAT;
+    
     for (int safe : safeNodes) {
         auto [path, cost, time] = runDijkstra(graph, source, safe);
         if (cost < 0) continue; // unreachable
         
+        // Minimum safe distance: must be at least 3 graph edges (hops) away
+        if (path.size() < 4) continue; // path.size() includes source, so 4 means 3 edges
+        
         // Elevation bonus (higher = safer)
         double elevBonus = NODE_ELEVATION.count(safe) ? NODE_ELEVATION.at(safe) : 10.0;
         
-        // Combined score: prioritize high ground + short distance
+        // Get safe node coordinates
+        auto [safe_lat, safe_lng] = graph.nodeCoords[safe];
+        
+        // Geographic directional avoidance
+        double direction_bonus = 0.0;
+        if (disaster_east && safe_lng < source_lng) direction_bonus += 10.0; // prioritize west
+        else if (disaster_west && safe_lng > source_lng) direction_bonus += 10.0; // prioritize east
+        if (disaster_north && safe_lat < source_lat) direction_bonus += 10.0; // prioritize south
+        else if (disaster_south && safe_lat > source_lat) direction_bonus += 10.0; // prioritize north
+        
+        // Combined score: prioritize high ground + short distance + direction + minimum distance
         // Lower cost = better (shorter distance)
         // Higher elevation = better
-        double score = (1000.0 / (cost + 100.0)) + (elevBonus / 5.0);
+        // Direction bonus
+        double score = (1000.0 / (cost + 100.0)) + (elevBonus / 5.0) + direction_bonus;
         
         if (score > bestScore) {
             bestScore = score;
