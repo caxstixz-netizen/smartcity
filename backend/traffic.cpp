@@ -3,19 +3,21 @@
 #include "httplib.h"
 #include "json.hpp"
 
-#include <vector>
-#include <chrono>
-#include <cmath>
-#include <iostream>
-#include <random>
-#include <sstream>
-#include <stdexcept>
-#include <thread>
+#include <vector> //storing edge updates.
+#include <chrono> //for timestamps and timing.
+#include <cmath> //for abs()
+#include <mutex>  //for thread safety in smoothing.
+#include <iostream> //for logging.
+#include <random> //for traffic simulation.
+#include <sstream>  //for building API request paths.
+#include <stdexcept> //for exception handling in API calls.
+#include <thread> //for background traffic refresh.
 
 using json = nlohmann::json;
 
 TrafficFetcher::TrafficFetcher(const std::string& apiKey)
-    : apiKey_(apiKey), simulationMode_(apiKey.empty()) {}
+    : apiKey_(apiKey), simulationMode_(apiKey.empty()) {} 
+    //used simulation mode if no API key provided.
 
 // ─── Public fetch ──────────────────────────────────────────────────────────
 TrafficSnapshot TrafficFetcher::fetch() {
@@ -41,7 +43,8 @@ TrafficSnapshot TrafficFetcher::fetch() {
         updates = simulateTraffic();
     }
 
-    // Apply EMA smoothing and detect significant changes
+    // Apply EMA smoothing and detect significant changes 
+    //(never used since we're in simulation mode, but left here for completeness)
     {
         std::lock_guard<std::mutex> lock(smoothMutex_);
         for (auto& u : updates) {
@@ -59,13 +62,13 @@ TrafficSnapshot TrafficFetcher::fetch() {
     return snap;
 }
 
-// ─── TomTom API fetch ──────────────────────────────────────────────────────
+// ─── TomTom API fetch (never used in simulation mode) ──────────────────────────────────────────────────────
 std::vector<TrafficUpdate> TrafficFetcher::fetchTomTom() {
     httplib::Client cli("https://api.tomtom.com");
     cli.set_connection_timeout(5, 0);
     cli.set_read_timeout(8, 0);
 
-    // Precomputed midpoints for each edge
+    // Precomputed midpoints for each edge (for api calls, we dont use for simulation)
     static const std::map<std::string, std::pair<double,double>> EDGE_MIDPOINTS = {
         {"0-2",  {19.058, 72.838}}, {"0-3",  {19.058, 72.840}}, {"0-10", {19.055, 72.839}},
         {"1-2",  {19.067, 72.835}}, {"1-3",  {19.067, 72.838}}, {"1-15", {19.069, 72.831}},
@@ -92,7 +95,12 @@ std::vector<TrafficUpdate> TrafficFetcher::fetchTomTom() {
 
     std::vector<TrafficUpdate> updates;
     updates.reserve(MUMBAI_EDGE_IDS.size());
-
+    /*we dont use for simulation, but if we were to fetch live data, 
+    we would iterate over each edge, call the TomTom API with the 
+    midpoint coordinates, parse the response for current and free 
+    flow speeds, calculate the multiplier, and store it in the 
+    updates vector. We also handle exceptions and rate limit 
+    ourselves with a short sleep between calls.*/
     for (const auto& edgeId : MUMBAI_EDGE_IDS) {
         auto it = EDGE_MIDPOINTS.find(edgeId);
         if (it == EDGE_MIDPOINTS.end()) continue;
@@ -133,17 +141,25 @@ std::vector<TrafficUpdate> TrafficFetcher::fetchTomTom() {
 
     return updates;
 }
-
+// we mainly use this 
 // ─── Simulation (random walk) ──────────────────────────────────────────────
 std::vector<TrafficUpdate> TrafficFetcher::simulateTraffic() {
-    static std::mt19937 rng(std::random_device{}());
+    //Mersenne Twister random number generator with a random seed. 
+    static std::mt19937 rng(std::random_device{}()); //static variables persist across calls
+    
+    //uniform distribution between -0.15 and +0.15 
+    //(used to slightly change the multiplier each time).
     static std::uniform_real_distribution<double> nudge(-0.15, 0.15);
+
+    //stores the current multiplier for each edge (so changes are smooth).
     static std::map<std::string, double> simState;
 
     std::vector<TrafficUpdate> updates;
     updates.reserve(MUMBAI_EDGE_IDS.size());
 
     for (const auto& edgeId : MUMBAI_EDGE_IDS) {
+        //For each edge, if it doesn't have a stored multiplier, 
+        //initialise it randomly between 1.0 and 1.5.
         if (simState.find(edgeId) == simState.end()) {
             std::uniform_real_distribution<double> init(1.0, 1.5);
             simState[edgeId] = init(rng);
@@ -152,36 +168,47 @@ std::vector<TrafficUpdate> TrafficFetcher::simulateTraffic() {
         double& m = simState[edgeId];
         m += nudge(rng);
         m = std::max(0.8, std::min(2.5, m));
-
+        //Clamp the multiplier to the range [0.8, 2.5] 
+        //(so speeds don't go to zero or become unrealistically high).
+        
         double freeFlow = 50.0;
-        double current  = freeFlow / m;
+        double current  = freeFlow / m; //current speed = freeFlow / multiplier.
 
         updates.push_back({edgeId, current, freeFlow, m, severityLabel(m)});
-    }
+    } //No sleeping – simulation is instant.
     return updates;
 }
 
-// ─── EMA smoothing ─────────────────────────────────────────────────────────
+// ─── EMA smoothing (Exponential Moving Average) ──────────────────────────────────────────────
 double TrafficFetcher::smoothMultiplier(const std::string& edgeId, double raw) {
     auto it = prevMultipliers_.find(edgeId);
+    //If this is the first time we see the edge, 
+    //store the raw value and return it.
     if (it == prevMultipliers_.end()) {
         prevMultipliers_[edgeId] = raw;
         return raw;
     }
+    //alpha_ = 0.3 (class member, defined in traffic.h).
     double smoothed = alpha_ * raw + (1.0 - alpha_) * it->second;
+    //smoothed = 0.3 * raw + 0.7 * previous_smoothed
     it->second = smoothed;
     return smoothed;
+    //This EMA smooths out sudden fluctuations, preventing the graph from changing too abruptly.
 }
 
 // ─── Severity label ────────────────────────────────────────────────────────
 std::string TrafficFetcher::severityLabel(double multiplier) {
-    if (multiplier < 1.2) return "green";
-    if (multiplier < 2.0) return "yellow";
-    return "red";
+    //multiplier = freeFlowSpeed / currentSpeed
+    if (multiplier < 1.2) return "green"; //traffic is light
+    if (multiplier < 2.0) return "yellow"; //moderate congestion 
+    return "red"; //heavy congestion or standstill 
 }
 
 // ─── Static edge list (canonical "min-max" ids) ─────────────────────────────
+//Defines all edges in the graph (undirected, with from < to). 
+//This matches the edges added in server.cpp.
 const std::vector<std::string> TrafficFetcher::MUMBAI_EDGE_IDS = {
+    //(all edges in canonical form: smaller ID first)
     "0-2",  "0-3",  "0-10",
     "1-2",  "1-3",  "1-15", "1-16",
     "2-4",  "2-5",  "2-16", "2-18",
@@ -201,3 +228,4 @@ const std::vector<std::string> TrafficFetcher::MUMBAI_EDGE_IDS = {
     "17-18",
     "18-19"
 };
+// both for simulation and for iterating over edges when fetching from TomTom.

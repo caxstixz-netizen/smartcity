@@ -205,6 +205,9 @@ public:
         double midLat = (lat1 + lat2) / 2.0 + sign * dlng * 0.15;
         double midLng = (lng1 + lng2) / 2.0 - sign * dlat * 0.15;
         return { {lat1, lng1}, {midLat, midLng}, {lat2, lng2} };
+    /*Returns three points: start, a midpoint offset perpendicular to the straight line,
+    and end. Used by the frontend to draw curved roads instead of straight lines, making 
+    the map look nicer. The offset direction alternates based on the sum of node IDs.*/
     }
 
     // ── Weight operations ─────────────────────────────────────────────────
@@ -216,13 +219,14 @@ public:
     double getEdgeWeight(int u, int v) const {
         for (const auto& e : adj[u]) if (e.to == v) return e.weight;
         return -1.0;
+    //Simple update and query without thread safety (used only in single‑threaded contexts).
     }
 
     // ── Dynamic (traffic-aware) weight updates — thread-safe ─────────────
     // multiplier is applied on top of the stored base weight.
     // Call from traffic background thread; pathfinding thread reads via getAdj().
     void updateEdgeWeightDynamic(int u, int v, double multiplier) {
-        std::lock_guard<std::mutex> lock(weightMutex);
+        std::lock_guard<std::mutex> lock(weightMutex); //Locks weightMutex before reading/writing.
         // Retrieve base weight
         double base = baseWeight(u, v);
         if (base < 0) return; // edge doesn't exist
@@ -230,6 +234,8 @@ public:
         for (auto& e : adj[u]) if (e.to == v) { e.weight = newW; break; }
         for (auto& e : adj[v]) if (e.to == u) { e.weight = newW; break; }
         trafficMultipliers[{std::min(u,v), std::max(u,v)}] = multiplier;
+        /*Retrieves the base weight (original distance), multiplies by the traffic 
+        multiplier, updates both directed edges, and stores the multiplier in a map.*/
     }
 
     // Reset all edges to base weights (clears traffic multipliers)
@@ -246,12 +252,14 @@ public:
         std::lock_guard<std::mutex> lock(weightMutex);
         auto it = trafficMultipliers.find({std::min(u,v), std::max(u,v)});
         return (it != trafficMultipliers.end()) ? it->second : 1.0;
+        //Returns the current traffic multiplier for an edge (default 1.0)
     }
 
     // Snapshot all current traffic multipliers (for /api/traffic/status)
     std::map<std::pair<int,int>, double> getAllTrafficMultipliers() const {
         std::lock_guard<std::mutex> lock(weightMutex);
         return trafficMultipliers;
+        //Returns a copy of the multiplier map (thread‑safe).
     }
 
     // ── Original edge storage ─────────────────────────────────────────────
@@ -262,6 +270,7 @@ public:
         for (const auto& [u, v, w] : edgeList) {
             baseWeights[{std::min(u,v), std::max(u,v)}] = w;
         }
+        //Stores the original undirected edges for later resetting.
     }
 
     void resetToOriginal() {
@@ -278,22 +287,34 @@ public:
     const std::vector<std::tuple<int,int,double>>& getRawEdges() const { return rawEdges; }
 
     // ── Public data ───────────────────────────────────────────────────────
+    //These are public for simplicity (the frontend can read them directly). 
+    //In a larger project they might be private with getters.
     std::map<int, std::string> nodeNames;
     std::vector<std::pair<double,double>> nodeCoords; // {lat, lng}
     std::vector<bool> nodeActive;
 
 private:
-    std::vector<std::vector<Edge>> adj;
-    std::unordered_set<std::pair<int,int>, PairHash> blockedEdges;
+    // adjacency list: adj[u] = vector of edges from u
+    std::vector<std::vector<Edge>> adj; 
+
+    // Blocked edges: stores both directions of each blocked edge for O(1) lookup.
+    std::unordered_set<std::pair<int,int>, PairHash> blockedEdges; 
+
+    // Original edges for resetting: stores undirected edges (u,v,w) where u < v to avoid duplicates.
     std::vector<std::tuple<int,int,double>> originalEdges;
+
+    // Raw edges: same as originalEdges, but updated by node/edge add/remove operations (used for resetting).
     std::vector<std::tuple<int,int,double>> rawEdges;
 
     // Dynamic traffic support
+    // weightMutex protects access to baseWeights and trafficMultipliers.
     mutable std::mutex weightMutex;
     std::map<std::pair<int,int>, double> baseWeights;      // original distances
     std::map<std::pair<int,int>, double> trafficMultipliers;
 
     double baseWeight(int u, int v) const {
+        //Helper to get the base weight from the map; if not found, 
+        //returns the current weight (assuming multiplier = 1).
         auto it = baseWeights.find({std::min(u,v), std::max(u,v)});
         if (it != baseWeights.end()) return it->second;
         // Fallback: current adj weight divided by 1 (no multiplier stored)
