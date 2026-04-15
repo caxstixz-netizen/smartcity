@@ -519,6 +519,11 @@ select:hover:not(:focus), input[type="number"]:hover:not(:focus) {
   background: #FFF3E0;
   border-left-color: #E09B5E;
 }
+.callout-info {
+  background: #EAF4FB;
+  border-left-color: #5BA4CF;
+  color: #1A3A52;
+}
 #transportNotice {
   margin: 10px 0;
   font-weight: 500;
@@ -654,7 +659,7 @@ select:hover:not(:focus), input[type="number"]:hover:not(:focus) {
 /* ── Three stat chips ─────────────────────────────────────────────────── */
 .evac-chips {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: 1fr 1fr;
   border-bottom: 1px solid var(--border);
 }
 
@@ -664,9 +669,11 @@ select:hover:not(:focus), input[type="number"]:hover:not(:focus) {
   gap: 8px;
   padding: 10px 10px;
   border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
   background: #F9F6F2;
 }
-.evac-chip:last-child { border-right: none; }
+.evac-chip:nth-child(2n) { border-right: none; }
+.evac-chip:nth-last-child(-n+2) { border-bottom: none; }
 
 .evac-chip-icon {
   font-size: 16px;

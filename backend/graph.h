@@ -25,7 +25,7 @@ struct PairHash {
 class CityGraph {
 public:
     CityGraph() : CityGraph(0) {}
-    CityGraph(int nodes) : adj(nodes), nodeNames(nodes), nodeActive(nodes, true) {}
+    CityGraph(int nodes) : adj(nodes), nodeNames(), nodeActive(nodes, true) {}
 
     // std::mutex is not copyable/movable, so we must define these manually.
     // The copy creates a fresh mutex — the copied graph gets its own independent lock.
@@ -101,7 +101,6 @@ public:
         int maxIdx = std::max(from, to);
         if (maxIdx >= (int)adj.size()) {
             adj.resize(maxIdx + 1);
-            nodeNames.resize(maxIdx + 1);
             nodeActive.resize(maxIdx + 1, true);
             nodeCoords.resize(maxIdx + 1, {0.0, 0.0});
         }
@@ -132,7 +131,7 @@ public:
     int addNode(const std::string& name, double lat, double lng) {
         int id = (int)adj.size();
         adj.emplace_back();
-        nodeNames.push_back(name);
+        nodeNames[id] = name;
         nodeActive.push_back(true);
         nodeCoords.push_back({lat, lng});
         return id;
@@ -148,7 +147,7 @@ public:
         }
         adj[id].clear();
         nodeActive[id] = false;
-        nodeNames[id] = "";
+        nodeNames.erase(id);
         rawEdges.erase(std::remove_if(rawEdges.begin(), rawEdges.end(),
             [id](const auto& t){
                 return std::get<0>(t)==id || std::get<1>(t)==id;
@@ -271,7 +270,7 @@ public:
     const std::vector<std::tuple<int,int,double>>& getRawEdges() const { return rawEdges; }
 
     // ── Public data ───────────────────────────────────────────────────────
-    std::vector<std::string> nodeNames;
+    std::map<int, std::string> nodeNames;
     std::vector<std::pair<double,double>> nodeCoords; // {lat, lng}
     std::vector<bool> nodeActive;
 

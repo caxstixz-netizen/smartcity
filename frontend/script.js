@@ -47,6 +47,8 @@ window.ROAD_POLYLINES = {};
    OSRM ROAD ROUTING — CACHE WITH 7-DAY TTL
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// Decodes a Google-encoded polyline string into [[lat, lng], ...] coordinates.
+// See: https://developers.google.com/maps/documentation/utilities/polylinealgorithm
 function decodePolyline(encoded) {
   const coords = [];
   let index = 0, lat = 0, lng = 0;
@@ -422,6 +424,7 @@ function drawEdges() {
 
     const hitArea = L.polyline(pts, { ...EDGE_HIT_STYLE }).addTo(map);
 
+    // Tooltip content is a closure so it always reads the latest trafficData
     const tooltipContent = () => {
       const edgeKey = `${Math.min(edge.from, edge.to)}-${Math.max(edge.from, edge.to)}`;
       const td = trafficData[edgeKey];
@@ -540,6 +543,7 @@ function populateDropdowns() {
   if (selectedSource != null) refreshNodeMarker(selectedSource);
   if (selectedTarget != null) refreshNodeMarker(selectedTarget);
 
+  // Use a guard flag to prevent double-attaching listeners if populateDropdowns is called again
   if (!srcSel.hasListener) {
     srcSel.addEventListener('change', () => {
       const prev = selectedSource;
@@ -620,11 +624,10 @@ function animatePath(nodeIds, color, onDone) {
   if (allPts.length < 2) { if (onDone) onDone(); return null; }
 
   const isEvac     = (color === '#B08968');
-  const isBestPath = (color === '#66A66F');
 
-  // ── STEP 2: Dark navy blue path, bold weight ──
-  const lineColor  = isBestPath ? '#0D1B2A' : (isEvac ? '#0D1B2A' : '#0D1B2A');
-  const lineWeight = isBestPath ? 8 : 7;
+  // All path types use the same dark navy color; `color` param is kept for API compatibility
+  const lineColor  = '#0D1B2A';
+  const lineWeight = isEvac ? 7 : 8;
   const glowColor  = 'rgba(13,27,42,0.15)';
 
   // ── STEP 3: Pre-build LatLng objects to avoid repeated array creation in rAF ──
@@ -973,7 +976,8 @@ async function evacuate() {
   updatePublicTransportNotice(disaster);
 
   try {
-    const data = await apiPost('/disaster', { disaster, location: locationId });
+    const blocked = getBlockedEdgeList();
+    const data = await apiPost('/disaster', { disaster, location: locationId, blockedEdges: blocked });
     hideAlgoProgress();
     renderEvacResult(data, disaster);
     panel.classList.remove('hidden');
@@ -1110,7 +1114,8 @@ function connectTrafficStream() {
 
       if (data.significantChange && lastActiveAlgo) {
         console.log('[Traffic] Significant change — re-running', lastActiveAlgo.algo);
-        runAlgorithm(lastActiveAlgo.algo, lastActiveAlgo.source, lastActiveAlgo.target);
+        // Always re-runs all algorithms regardless of lastActiveAlgo.algo value
+        runAllAlgorithms();
       }
     } catch (err) {
       console.warn('[Traffic] SSE parse error:', err);
@@ -1168,14 +1173,6 @@ async function resetGraph() {
 /* ═══════════════════════════════════════════════════════════════════════════
    BOOTSTRAP
    ═══════════════════════════════════════════════════════════════════════════ */
-
-async function runAlgorithm(algo, source, target) {
-  if (algo === 'all') {
-    await runAllAlgorithms();
-  } else {
-    await runAllAlgorithms();
-  }
-}
 
 document.addEventListener('DOMContentLoaded', () => {
   populateDropdowns();

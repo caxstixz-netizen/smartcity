@@ -6,8 +6,6 @@
 #include <algorithm>
 #include <numeric>      // for accumulate
 #include <random>       // for std::shuffle and random_device
-#include <cstdlib>      // for rand
-#include <ctime>        // for time()
 #include <map>
 #include <set>
 #include <cmath>
@@ -15,7 +13,6 @@
 #include <chrono>
 #include <mutex>
 #include <atomic>
-#include <functional>
 #include "httplib.h"
 #include "json.hpp"
 #include "graph.h"
@@ -535,9 +532,55 @@ int main() {
                 res.set_content(result.dump(), "application/json");
                 return;
             }
-            
+
+            // ── Apply blocked edges from the request (same as /solve endpoint) ──
+            if (body.contains("blockedEdges") && body["blockedEdges"].is_array()) {
+                vector<pair<int,int>> blocked;
+                for (auto& edge : body["blockedEdges"]) {
+                    int u = edge[0];
+                    int v = edge[1];
+                    blocked.push_back({u, v});
+                }
+                disasterGraph.setBlockedEdges(blocked);
+            }
+
+            // ── Filter safe nodes based on disaster type ──────────────────────
+            // For water-related disasters (flood, surge, sea level rise), exclude
+            // coastal / low-lying nodes so we never evacuate people toward the sea.
+            // Minimum safe elevation thresholds per disaster:
+            //   urban_flood: > 7m  (same threshold used when penalising roads)
+            //   storm_surge / sea_level_rise: > 10m  (more severe, need higher ground)
+            //   others: no elevation filter
+            double minSafeElev = 0.0;
+            if (disasterKey == "urban_flood" || disasterKey == "flood") {
+                minSafeElev = 7.0;
+            } else if (disasterKey == "storm_surge" || disasterKey == "surge" ||
+                       disasterKey == "sea_level_rise" || disasterKey == "slr") {
+                minSafeElev = 10.0;
+            }
+
+            vector<int> candidateSafeNodes;
+            for (int s : SAFE_NODES) {
+                double elev = NODE_ELEVATION.count(s) ? NODE_ELEVATION.at(s) : 10.0;
+                if (elev >= minSafeElev) {
+                    candidateSafeNodes.push_back(s);
+                }
+            }
+            // Fallback: if all safe nodes are filtered out, use any node above minSafeElev
+            if (candidateSafeNodes.empty()) {
+                for (auto& [node, elev] : NODE_ELEVATION) {
+                    if (elev >= minSafeElev && node != location) {
+                        candidateSafeNodes.push_back(node);
+                    }
+                }
+            }
+            // Last resort fallback: use original SAFE_NODES
+            if (candidateSafeNodes.empty()) {
+                candidateSafeNodes = SAFE_NODES;
+            }
+
             // Get smart evacuation node
-            auto [safeNode, distToSafe] = getSmartEvacuationNode(disasterGraph, location, SAFE_NODES);
+            auto [safeNode, distToSafe] = getSmartEvacuationNode(disasterGraph, location, candidateSafeNodes);
             if (safeNode == -1) {
                 result = {{"error", "No evacuation route found"}};
                 res.set_content(result.dump(), "application/json");
@@ -737,6 +780,7 @@ int main() {
     svr.Get("/api/status", [](const httplib::Request&, httplib::Response& res) {
         res.set_content("{\"status\":\"ok\"}", "application/json");
     });
+
     svr.Get("/api/road_points", [&](const httplib::Request& req, httplib::Response& res) {
         json result;
         try {
