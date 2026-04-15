@@ -1,6 +1,7 @@
 // graph.h — CityGraph with dynamic node/edge support + thread-safe traffic weights
-#pragma once
+#pragma once //Header guard, ensures the file is included only once.
 
+//Includes necessary standard libraries:
 #include <vector>
 #include <string>
 #include <utility>
@@ -11,10 +12,15 @@
 #include <map>
 #include <mutex>
 
+/*Represents a directed edge from a node to 
+"to" with a given weight (distance in meters, 
+or time/cost after traffic multipliers).*/
 struct Edge {
     int to;
     double weight;
 };
+/*for each physical road, added two Edge objects (both directions). 
+The to field indicates the neighbour node.*/
 
 struct PairHash {
     size_t operator()(const std::pair<int,int>& p) const {
@@ -24,8 +30,13 @@ struct PairHash {
 
 class CityGraph {
 public:
+//Default constructor, delegates to the parameterised constructor with nodes = 0
     CityGraph() : CityGraph(0) {}
     CityGraph(int nodes) : adj(nodes), nodeNames(), nodeActive(nodes, true) {}
+    /*adj – adjacency list, resized to nodes.
+    nodeNames – empty map (filled later).
+    nodeActive – vector of bool initialised to true 
+    for all nodes (all nodes active by default)*/
 
     // std::mutex is not copyable/movable, so we must define these manually.
     // The copy creates a fresh mutex — the copied graph gets its own independent lock.
@@ -44,6 +55,8 @@ public:
         // weightMutex is default-constructed (fresh, unlocked) — intentional
     }
 
+    /*Copy assignment: Locks both other and this mutexes 
+    (in a fixed order to avoid deadlock). Copies all members.*/
     CityGraph& operator=(const CityGraph& other) {
         if (this == &other) return *this;
         // Lock both objects to be safe (disaster functions assign into an
@@ -63,7 +76,8 @@ public:
         return *this;
     }
 
-    // Move constructor / assignment: take data, leave source in a valid empty state
+    // Move constructor Locks the source's mutex, then moves all members. 
+    //The source is left in a valid but unspecified state.
     CityGraph(CityGraph&& other) noexcept {
         std::lock_guard<std::mutex> lock(other.weightMutex);
         adj                = std::move(other.adj);
@@ -78,6 +92,7 @@ public:
         trafficMultipliers = std::move(other.trafficMultipliers);
     }
 
+    //Move assignment: Similar locking and moving.
     CityGraph& operator=(CityGraph&& other) noexcept {
         if (this == &other) return *this;
         std::lock_guard<std::mutex> lockOther(other.weightMutex);
@@ -100,6 +115,8 @@ public:
         // Expand adjacency list if needed
         int maxIdx = std::max(from, to);
         if (maxIdx >= (int)adj.size()) {
+            /*Adds a directed edge. If the node index is out of range, 
+            resizes adjacency, nodeActive, and nodeCoords accordingly.*/
             adj.resize(maxIdx + 1);
             nodeActive.resize(maxIdx + 1, true);
             nodeCoords.resize(maxIdx + 1, {0.0, 0.0});
@@ -107,12 +124,16 @@ public:
         adj[from].push_back({to, weight});
     }
 
+    /*Adds both directions and also stores the edge in rawEdges 
+    (a list of all undirected edges, used for resetting).*/
     void addBidirectionalEdge(int from, int to, double weight) {
         addEdge(from, to, weight);
         addEdge(to, from, weight);
         rawEdges.emplace_back(from, to, weight);
     }
 
+    /*Removes both directed edges and also removes the undirected 
+    representation from rawEdges.*/
     void removeEdge(int from, int to) {
         auto& v = adj[from];
         v.erase(std::remove_if(v.begin(), v.end(),
@@ -162,6 +183,7 @@ public:
 
     // ── Blocked edges ─────────────────────────────────────────────────────
     void setBlockedEdges(const std::vector<std::pair<int,int>>& blocked) {
+        //stores both directions of each blocked edge in an unordered set.
         blockedEdges.clear();
         for (const auto& e : blocked) {
             blockedEdges.insert(e);
@@ -169,7 +191,7 @@ public:
         }
     }
 
-    bool isBlocked(int u, int v) const {
+    bool isBlocked(int u, int v) const { //checks if a directed edge is blocked.
         return blockedEdges.find({u, v}) != blockedEdges.end();
     }
 

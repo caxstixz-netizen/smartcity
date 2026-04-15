@@ -1,13 +1,14 @@
 // bellman.cpp
 #ifndef BELLMAN_CPP
 #define BELLMAN_CPP
-#include "graph.h"
-#include <vector>
-#include <chrono>
-#include <climits>
-#include <algorithm>
+#include "graph.h" //Provides CityGraph and Edge.
+#include <vector> //For distance and predecessor arrays.
+#include <chrono> // For high‑resolution timing.
+#include <climits> //Provides INT_MAX as initial distance.
+#include <algorithm> //For std::reverse.
 using namespace std;
 
+//Starts a timer to measure execution time in microseconds.
 tuple<vector<int>, double, long long> runBellmanFord(const CityGraph& graph, int src, int dst, double raiot) {
     auto start = chrono::high_resolution_clock::now();
 
@@ -19,6 +20,8 @@ tuple<vector<int>, double, long long> runBellmanFord(const CityGraph& graph, int
     // Collect non-blocked edges once — avoids re-checking isBlocked every iteration
     vector<tuple<int,int,double>> edges;
     edges.reserve(n * 4);
+    /*reserves space for a rough upper bound 
+    (since each node can have multiple edges).*/
     for (int u = 0; u < n; ++u) {
         for (const Edge& e : graph.getAdj()[u]) {
             if (!graph.isBlocked(u, e.to))
@@ -34,17 +37,23 @@ tuple<vector<int>, double, long long> runBellmanFord(const CityGraph& graph, int
                 dist[v] = dist[u] + w;
                 prev[v] = u;
                 updated = true;
+                /*f in some iteration no distance improves, 
+                we can stop early because all shortest paths 
+                have already been found.*/
             }
         }
         if (!updated) break;
     }
 
+    //Stop timer and compute elapsed microseconds.
     auto end = chrono::high_resolution_clock::now();
     long long elapsed = chrono::duration_cast<chrono::microseconds>(end - start).count();
 
     if (dist[dst] == INT_MAX) return {{}, -1, elapsed};
     if (raiot >= 0 && dist[dst] > raiot) return {{}, -1, elapsed};
 
+    //The loop pushes nodes in reverse order (from destination to source), 
+    //so we reverse the vector to get the correct order from source to destination.
     vector<int> path;
     for (int at = dst; at != -1; at = prev[at]) path.push_back(at);
     reverse(path.begin(), path.end());
